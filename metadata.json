@@ -1,0 +1,7 @@
+{
+  "name": "MFD Advisor Co-Pilot",
+  "description": "AI-powered Indian Mutual Fund Distributor assistant converting post-meeting notes into structured client profiles, SEBI/AMFI asset allocation, plain-English talking points, and client follow-ups.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
