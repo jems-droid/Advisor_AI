@@ -16,8 +16,11 @@ import {
   PiggyBank,
   Sparkles,
   Layers,
+  ShieldCheck,
 } from 'lucide-react';
-import { ClientProfile, ClientGoal } from '../types';
+import { ClientProfile, ClientGoal, SebiRiskometerLevel } from '../types';
+import { SebiRiskometerGauge } from './SebiRiskometerGauge';
+import { mapToSebiRiskometer, SEBI_RISKOMETER_MAP } from '../utils/sebiRiskometer';
 
 interface ProfileCardProps {
   profile: ClientProfile;
@@ -36,6 +39,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ profile }) => {
       ? 5
       : 3
   );
+
+  // SEBI Standard 6-Level Riskometer Tag
+  const sebiRiskLevel: SebiRiskometerLevel =
+    profile.sebiRiskometer || mapToSebiRiskometer(scale, profile.riskTolerance);
+  const sebiMeta = SEBI_RISKOMETER_MAP[sebiRiskLevel] || SEBI_RISKOMETER_MAP.Moderate;
 
   const getRiskLabel = (s: number) => {
     switch (s) {
@@ -119,10 +127,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ profile }) => {
           </div>
         </div>
 
-        {/* Granular Risk Rating Pill */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
-            Risk Tolerance:
+        {/* Granular Risk & SEBI Riskometer Badges */}
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border shadow-2xs ${sebiMeta.colorClass.bg} ${sebiMeta.colorClass.text} ${sebiMeta.colorClass.border}`}>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            SEBI: {sebiRiskLevel}
           </span>
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${riskColor.badge}`}>
             <Shield className="w-3.5 h-3.5" />
@@ -236,6 +245,14 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({ profile }) => {
             );
           })}
         </div>
+      </div>
+
+      {/* Official SEBI 6-Tier Riskometer Gauge */}
+      <div className="mb-5">
+        <SebiRiskometerGauge
+          currentLevel={sebiRiskLevel}
+          schemeOrPortfolioName={`${profile.clientName}'s Assessed Portfolio Suitability`}
+        />
       </div>
 
       {/* Specific Financial Goals & Milestones */}

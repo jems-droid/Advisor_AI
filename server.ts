@@ -4,6 +4,9 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { synthesizeAdvisorDossierFallback } from "./src/server/advisorEngine.ts";
+import { mapToSebiRiskometer } from "./src/utils/sebiRiskometer.ts";
+import { getTailoredRecommendedSchemes } from "./src/data/recommendedSchemes.ts";
+import { calculateWealthMetrics, parseSurplusAndLumpsum, parseHorizonYears } from "./src/utils/wealthCalculator.ts";
 
 dotenv.config();
 
@@ -223,6 +226,39 @@ Generate the structured advisor dossier adhering strictly to Indian SEBI/AMFI mu
     }
 
     parsedData.timestamp = new Date().toISOString();
+
+    // Ensure SEBI Riskometer mapping
+    if (parsedData.clientProfile) {
+      if (!parsedData.clientProfile.sebiRiskometer) {
+        parsedData.clientProfile.sebiRiskometer = mapToSebiRiskometer(
+          parsedData.clientProfile.riskScale,
+          parsedData.clientProfile.riskTolerance
+        );
+      }
+    }
+
+    // Ensure tailored recommended schemes
+    if (!parsedData.recommendedSchemes || parsedData.recommendedSchemes.length === 0) {
+      const riskLvl = parsedData.clientProfile?.sebiRiskometer || 'Moderately High';
+      parsedData.recommendedSchemes = getTailoredRecommendedSchemes(riskLvl, platform);
+    }
+
+    // Ensure wealth creation metrics
+    if (!parsedData.wealthMetrics) {
+      const surplus = parsedData.clientProfile?.monthlySurplusOrLumpsum || '';
+      const horizon = parsedData.clientProfile?.investmentHorizon || '';
+      const parsedSurplus = parseSurplusAndLumpsum(surplus);
+      const parsedHorizon = parseHorizonYears(horizon);
+      const equityTotal = parsedData.assetAllocation?.equityTotal || 65;
+      const debtHybridTotal = parsedData.assetAllocation?.debtHybridTotal || 35;
+      const blendedCagr = Number(((equityTotal * 13.5 + debtHybridTotal * 7.5) / 100).toFixed(1));
+      parsedData.wealthMetrics = calculateWealthMetrics(
+        parsedSurplus.monthlySip,
+        parsedSurplus.lumpsum,
+        parsedHorizon,
+        blendedCagr
+      );
+    }
 
     res.json(parsedData);
   } catch (err: any) {

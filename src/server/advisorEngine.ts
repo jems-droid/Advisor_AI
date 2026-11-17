@@ -1,4 +1,7 @@
-import { AdvisorAnalysisResult, AssetAllocationItem, ClientGoal, TalkingPoint } from '../types';
+import { AdvisorAnalysisResult, AssetAllocationItem, ClientGoal, TalkingPoint, SebiRiskometerLevel } from '../types';
+import { mapToSebiRiskometer } from '../utils/sebiRiskometer';
+import { getTailoredRecommendedSchemes } from '../data/recommendedSchemes';
+import { calculateWealthMetrics, parseSurplusAndLumpsum, parseHorizonYears } from '../utils/wealthCalculator';
 
 export function synthesizeAdvisorDossierFallback(
   notes: string,
@@ -581,6 +584,29 @@ ${emailFormat}
 ---
 *Disclaimer: Mutual Fund investments are subject to market risks. Read all scheme related documents carefully. Select exact schemes via your NJ Wealth / AssetPlus Fund Finder panel based on live portal ratings.*`;
 
+  // Calculate SEBI Riskometer Level
+  const sebiRiskLevel: SebiRiskometerLevel = mapToSebiRiskometer(riskScale, risk);
+
+  // Attach sebiRiskometer to categories
+  const mappedCategories = categories.map((c) => ({
+    ...c,
+    sebiRiskometer: mapToSebiRiskometer(undefined, undefined, c.sebiCategory || c.subcategory),
+  }));
+
+  // Tailored Recommended Schemes comparison list
+  const recommendedSchemes = getTailoredRecommendedSchemes(sebiRiskLevel, platform);
+
+  // Wealth Creation Compounding Metrics
+  const parsedSurplus = parseSurplusAndLumpsum(surplus);
+  const parsedHorizon = parseHorizonYears(horizon);
+  const blendedCagr = Number(((equityTotal * 13.5 + debtHybridTotal * 7.5) / 100).toFixed(1));
+  const wealthMetrics = calculateWealthMetrics(
+    parsedSurplus.monthlySip,
+    parsedSurplus.lumpsum,
+    parsedHorizon,
+    blendedCagr
+  );
+
   return {
     clientProfile: {
       clientName,
@@ -593,6 +619,7 @@ ${emailFormat}
       riskTolerance: risk,
       riskScale,
       riskScaleLabel,
+      sebiRiskometer: sebiRiskLevel,
       monthlySurplusOrLumpsum: surplus,
       primaryGoals,
       structuredGoals,
@@ -604,9 +631,11 @@ ${emailFormat}
       equityTotal,
       debtHybridTotal,
       taxSavingTotal,
-      categories,
-      strategicRationale: `This portfolio structure is calibrated to balance ${risk.toLowerCase()} risk capacity (Scale ${riskScale}/5) with a ${horizon.toLowerCase()} horizon, pairing wealth generation with capital defense on ${platform}.`,
+      categories: mappedCategories,
+      strategicRationale: `This portfolio structure is calibrated to balance ${risk.toLowerCase()} risk capacity (Scale ${riskScale}/5, SEBI: ${sebiRiskLevel}) with a ${horizon.toLowerCase()} horizon, pairing wealth generation with capital defense on ${platform}.`,
     },
+    recommendedSchemes,
+    wealthMetrics,
     platformExecutionGuide: {
       platform,
       executionSteps,

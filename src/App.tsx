@@ -4,12 +4,15 @@ import { NotesInputSection } from './components/NotesInputSection';
 import { ProfileCard } from './components/ProfileCard';
 import { TalkingPointsSection } from './components/TalkingPointsSection';
 import { AssetAllocationSection } from './components/AssetAllocationSection';
+import { WealthCreationSection } from './components/WealthCreationSection';
+import { FundComparisonTable } from './components/FundComparisonTable';
 import { FollowUpDraftSection } from './components/FollowUpDraftSection';
 import { MarkdownReportView } from './components/MarkdownReportView';
 import { RegulatoryBanner } from './components/RegulatoryBanner';
-import { AdvisorAnalysisResult } from './types';
+import { PrintProposalDocument } from './components/PrintProposalDocument';
+import { AdvisorAnalysisResult, RecommendedScheme } from './types';
 import { SAMPLE_MEETING_NOTES } from './data/sampleNotes';
-import { LayoutDashboard, FileText, AlertCircle, History, Sparkles, Check } from 'lucide-react';
+import { LayoutDashboard, FileText, AlertCircle, History, Printer, Sparkles, Check } from 'lucide-react';
 
 export default function App() {
   const [notes, setNotes] = useState<string>(SAMPLE_MEETING_NOTES[0].rawText);
@@ -18,8 +21,30 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AdvisorAnalysisResult | null>(null);
+  const [schemes, setSchemes] = useState<RecommendedScheme[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'markdown'>('dashboard');
   const [history, setHistory] = useState<Array<{ id: string; clientName: string; time: string; result: AdvisorAnalysisResult }>>([]);
+
+  // Sync recommended schemes when result updates
+  useEffect(() => {
+    if (result?.recommendedSchemes) {
+      setSchemes(result.recommendedSchemes);
+    }
+  }, [result]);
+
+  const handleToggleScheme = (id: string) => {
+    setSchemes((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isSelected: !s.isSelected } : s))
+    );
+  };
+
+  const handleSelectAllSchemes = () => {
+    setSchemes((prev) => prev.map((s) => ({ ...s, isSelected: true })));
+  };
+
+  const handleDeselectAllSchemes = () => {
+    setSchemes((prev) => prev.map((s) => ({ ...s, isSelected: false })));
+  };
 
   // Load recent history from localStorage if available
   useEffect(() => {
@@ -59,6 +84,9 @@ export default function App() {
 
       const data: AdvisorAnalysisResult = await response.json();
       setResult(data);
+      if (data.recommendedSchemes) {
+        setSchemes(data.recommendedSchemes);
+      }
 
       // Save to recent advisor dossiers
       const newHistoryItem = {
@@ -93,6 +121,7 @@ export default function App() {
     setCustomInstructions('');
     setResult(null);
     setError(null);
+    setSchemes([]);
   };
 
   const handlePrint = () => {
@@ -154,8 +183,8 @@ export default function App() {
         {result && (
           <div id="advisory-results-view" className="space-y-6">
             {/* View Switcher Tabs & Meta Bar */}
-            <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-1.5">
+            <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   id="tab-interactive-dashboard"
@@ -184,50 +213,83 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 px-3 text-xs text-slate-500">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Client:</span>
-                <strong className="text-slate-800">{result.clientProfile.clientName || 'Investor'}</strong>
+              <div className="flex items-center gap-3 px-2 text-xs text-slate-500 self-end sm:self-auto flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Client:</span>
+                  <strong className="text-slate-800">{result.clientProfile.clientName || 'Investor'}</strong>
+                </div>
                 <span className="text-slate-300">•</span>
-                <span className="text-[10px] uppercase font-bold text-slate-400">Engine:</span>
-                <strong className="text-indigo-600">{platform}</strong>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Platform:</span>
+                  <strong className="text-indigo-600">{platform}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  title="Print official 2-page client proposal"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print 2-Page Proposal</span>
+                </button>
               </div>
             </div>
 
-            {/* Print proposal title block */}
-            <div className="hidden print:block mb-4 p-4 border-b border-slate-300">
-              <div className="text-xl font-bold text-slate-900">MUTUAL FUND ADVISORY DOSSIER</div>
-              <div className="text-xs text-slate-600 mt-1">
-                Prepared for: {result.clientProfile.clientName} | Platform Architecture: {platform}
-              </div>
+            {/* Screen View */}
+            <div className="print:hidden space-y-6">
+              {activeTab === 'dashboard' ? (
+                <div className="space-y-6">
+                  {/* 1. Profile Extraction with SEBI Riskometer */}
+                  <ProfileCard profile={result.clientProfile} />
+
+                  {/* 2. Wealth Creation & Compounding Projections */}
+                  <WealthCreationSection
+                    surplusText={result.clientProfile.monthlySurplusOrLumpsum}
+                    horizonText={result.clientProfile.investmentHorizon}
+                    equityTotal={result.assetAllocation.equityTotal}
+                    debtHybridTotal={result.assetAllocation.debtHybridTotal}
+                    initialCagr={result.wealthMetrics?.cagrRate}
+                  />
+
+                  {/* 3. Recommended Asset Allocation */}
+                  <AssetAllocationSection
+                    assetAllocation={result.assetAllocation}
+                    platform={platform}
+                    platformExecutionGuide={result.platformExecutionGuide}
+                  />
+
+                  {/* 4. Fund Comparison Table (Across NJ Wealth / AssetPlus / AMFI) */}
+                  <FundComparisonTable
+                    schemes={schemes}
+                    onToggleScheme={handleToggleScheme}
+                    onSelectAll={handleSelectAllSchemes}
+                    onDeselectAll={handleDeselectAllSchemes}
+                    platform={platform}
+                  />
+
+                  {/* 5. Advisory Concepts & Talking Points */}
+                  <TalkingPointsSection talkingPoints={result.advisoryConcepts} />
+
+                  {/* 6. Client Follow-Up Draft */}
+                  <FollowUpDraftSection
+                    drafts={result.clientFollowUpDraft}
+                    clientName={result.clientProfile.clientName}
+                  />
+                </div>
+              ) : (
+                <MarkdownReportView markdown={result.markdownReport} />
+              )}
+
+              {/* Regulatory Disclaimer Banner */}
+              <RegulatoryBanner />
             </div>
 
-            {activeTab === 'dashboard' ? (
-              <div className="space-y-6">
-                {/* 1. Profile Extraction */}
-                <ProfileCard profile={result.clientProfile} />
-
-                {/* 2. Advisory Concepts & Talking Points */}
-                <TalkingPointsSection talkingPoints={result.advisoryConcepts} />
-
-                {/* 3. Recommended Asset Allocation */}
-                <AssetAllocationSection
-                  assetAllocation={result.assetAllocation}
-                  platform={platform}
-                  platformExecutionGuide={result.platformExecutionGuide}
-                />
-
-                {/* 4. Client Follow-Up Draft */}
-                <FollowUpDraftSection
-                  drafts={result.clientFollowUpDraft}
-                  clientName={result.clientProfile.clientName}
-                />
-              </div>
-            ) : (
-              <MarkdownReportView markdown={result.markdownReport} />
-            )}
-
-            {/* Regulatory Disclaimer Banner */}
-            <RegulatoryBanner />
+            {/* Dedicated 2-Page Print Document */}
+            <PrintProposalDocument
+              result={result}
+              selectedSchemes={schemes.filter((s) => s.isSelected)}
+              platform={platform}
+            />
           </div>
         )}
       </main>
